@@ -27,6 +27,17 @@ git push origin lcms-tools-v1.0.0
 # GitHub: create Release from tag, paste body from RELEASE_lcms-tools-v1.0.0.md
 ```
 
+## Linux / Docker verify
+
+```powershell
+cd C:\Users\techj\Downloads\lcms_calculator
+docker build -t lcms-calculator-verify .
+docker run --rm lcms-calculator-verify
+# Expected: === Linux verify: ALL PASS ===
+```
+
+WSL/Git Bash: `bash scripts/docker_verify.sh`
+
 ## Governance reminders
 
 - RUO / manual SOP review / not regulatory submission
