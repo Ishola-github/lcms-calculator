@@ -1,0 +1,7 @@
+Level,Target (ng/L),Stock volume (µL),Diluent (mL),Final volume (mL)
+Std1,0.5,0.005,9.9995,10
+Std2,1.0,0.01,9.999,10
+Std3,2.0,0.02,9.998,10
+Std4,5.0,0.05,9.995,10
+Std5,10.0,0.1,9.99,10
+Std6,20.0,0.2,9.98,10

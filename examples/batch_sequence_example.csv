@@ -1,0 +1,11 @@
+Position,Vial,Type,Role,Notes
+1,BATCH-001-MB-01,Method blank,Blank,Initial blank · 1633A-style planning template; verify sequence against your SOP/method.
+2,BATCH-001-CAL-1,Calibration,Cal,Std level 1
+3,BATCH-001-CAL-2,Calibration,Cal,Std level 2
+4,BATCH-001-CAL-3,Calibration,Cal,Std level 3
+5,BATCH-001-CAL-4,Calibration,Cal,Std level 4
+6,BATCH-001-CAL-5,Calibration,Cal,Std level 5
+7,BATCH-001-CAL-6,Calibration,Cal,Std level 6
+8,BATCH-001-LCS,LCS,QC,Laboratory control sample
+9,S-001,Sample,Field,Field / client sample
+10,S-002,Sample,Field,Field / client sample

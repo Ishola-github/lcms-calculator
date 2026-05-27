@@ -1,0 +1,2 @@
+batch_id,analyst,analyte,timestamp_utc,notes,calibration_bracketed_per_sop,blanks_acceptable,lcs_/_ccv_within_limits,is_recovery_within_sop,holding_time_documented,instrument_tune_/_mass_cal_current,all_checks_pass
+BATCH-001,Analyst initials,PFOA,2026-05-27T19:00:00+00:00,RUO training batch,true,true,true,true,true,true,true
