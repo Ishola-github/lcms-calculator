@@ -17,11 +17,16 @@ from lcms_lab_calc import (
     QCFlag,
     RecoveryLimits,
     RPDLimits,
+    SALT_MW,
     calibration_prep_table,
     classify_recovery,
     evaluate_recovery_pair,
     internal_standard_spike,
     is_spike_with_extraction_note,
+    organic_aqueous_volumes,
+    ppm_to_mg_per_l,
+    recipe_meoh_water_with_buffer,
+    salt_mass_for_buffer,
     spe_concentration_factor,
 )
 from lcms_presets import (
@@ -307,16 +312,100 @@ with tab_eis:
     st.caption("Interpret against your SOP; no method-specific acceptance criteria applied.")
 
 with tab_mobile:
-    st.subheader("Mobile phase preparation")
-    total_ml = st.number_input("Total mobile phase volume (mL)", min_value=0.0, value=1000.0)
-    pct_a = st.slider("Organic fraction A (%)", 0.0, 100.0, 20.0)
-    pct_b = 100.0 - pct_a
-    if total_ml > 0:
-        st.write(f"Component A: **{total_ml * pct_a / 100.0:.2f} mL** ({pct_a:.1f}%)")
-        st.write(f"Component B: **{total_ml * pct_b / 100.0:.2f} mL** ({pct_b:.1f}%)")
-    additive_ul = st.number_input("Additive (e.g. ammonium acetate) µL per L", min_value=0.0, value=0.0)
-    if total_ml > 0 and additive_ul > 0:
-        st.write(f"Additive volume: **{additive_ul * total_ml / 1000.0:.3f} µL** for {total_ml} mL")
+    st.subheader("Mobile phase & chemistry helper")
+    st.caption(
+        "RUO bench preparation estimates. Review against your laboratory SOP before use."
+    )
+    mp_total = st.number_input("Total mobile phase volume (mL)", min_value=0.0, value=1000.0, key="mp_total")
+
+    sec_mix, sec_buffer, sec_ppm, sec_recipe = st.tabs(
+        ["Organic / aqueous mix", "Buffer salts", "ppm → mg/L", "Recipe text"]
+    )
+
+    with sec_mix:
+        organic_name = st.selectbox("Organic solvent", ["Methanol (MeOH)", "Acetonitrile (ACN)"])
+        pct_org = st.slider("% organic (MeOH or ACN)", 0.0, 100.0, 95.0, key="mp_pct_org")
+        if mp_total > 0:
+            try:
+                org_ml, aq_ml = organic_aqueous_volumes(mp_total, pct_org)
+                st.success(
+                    f"**{org_ml:.2f} mL** {organic_name} + **{aq_ml:.2f} mL** aqueous "
+                    f"= **{mp_total:g} mL** ({pct_org:g}:{100 - pct_org:g})."
+                )
+            except ValueError as exc:
+                st.error(str(exc))
+
+    with sec_buffer:
+        salt = st.selectbox("Salt", list(SALT_MW.keys()))
+        buf_mm = st.number_input("Target concentration (mM)", min_value=0.0, value=5.0)
+        buf_vol = st.number_input(
+            "Aqueous volume to prepare (mL)",
+            min_value=0.0,
+            value=float(mp_total * (100 - pct_org) / 100.0) if mp_total else 50.0,
+            help="Usually the aqueous fraction only.",
+        )
+        if buf_mm > 0 and buf_vol > 0:
+            try:
+                sm = salt_mass_for_buffer(salt, buf_mm, buf_vol)
+                st.metric("Mass to weigh", f"{sm.mass_g:.4f} g")
+                st.caption(f"≈ **{sm.mass_mg:.2f} mg** · MW {SALT_MW[salt]:g} g/mol")
+                st.info(
+                    f"Dissolve {sm.mass_g:.4f} g {salt} in water and dilute to **{buf_vol:g} mL** "
+                    f"for ~**{buf_mm:g} mM** (verify on balance and SOP)."
+                )
+            except ValueError as exc:
+                st.error(str(exc))
+
+    with sec_ppm:
+        st.markdown("**ppm → mg/L** (aqueous, ρ ≈ 1 g/mL)")
+        ppm_val = st.number_input("ppm", min_value=0.0, value=5.0)
+        st.success(f"≈ **{ppm_to_mg_per_l(ppm_val):.6g} mg/L**")
+        mg_val = st.number_input("mg/L → ppm", min_value=0.0, value=5.0, key="mg_to_ppm")
+        st.caption(f"≈ **{mg_val:.6g} ppm** (training approximation).")
+
+    with sec_recipe:
+        st.markdown("**Generate printable prep steps**")
+        preset = st.selectbox(
+            "Starting template",
+            [
+                "Custom",
+                "95:5 MeOH/H2O + 5 mM NH4OAc (aqueous)",
+                "80:20 ACN/H2O + 10 mM ammonium formate (aqueous)",
+                "20:80 MeOH/H2O (no buffer)",
+            ],
+        )
+        r_org = pct_org
+        r_mm = buf_mm
+        r_salt = salt
+        r_solvent = organic_name
+        if preset.startswith("95:5 MeOH"):
+            r_org, r_mm, r_salt, r_solvent = 95.0, 5.0, "Ammonium acetate", "Methanol (MeOH)"
+        elif preset.startswith("80:20 ACN"):
+            r_org, r_mm, r_salt, r_solvent = 80.0, 10.0, "Ammonium formate", "Acetonitrile (ACN)"
+        elif preset.startswith("20:80"):
+            r_org, r_mm, r_salt, r_solvent = 20.0, 0.0, salt, "Methanol (MeOH)"
+
+        add_1mp = st.checkbox("Note: 1-methylpiperidine additive (method-specific)", value=False)
+        add_note = (
+            "Add 1-methylpiperidine per method SOP (e.g. FDA PFAS LC-MS/MS workflows) — "
+            "confirm µL/L with your validated procedure."
+            if add_1mp
+            else ""
+        )
+        if st.button("Generate recipe", type="primary") and mp_total > 0:
+            try:
+                recipe = recipe_meoh_water_with_buffer(
+                    mp_total,
+                    r_org,
+                    r_solvent,
+                    r_mm,
+                    r_salt,
+                    buffer_in_aqueous_only=True,
+                    additive_note=add_note,
+                )
+                st.text_area("Prep sheet (copy to lab notebook)", recipe.as_text(), height=280)
+            except ValueError as exc:
+                st.error(str(exc))
 
 def _render_qc_flag(label: str, flagged) -> None:
     """Color-coded suggested interpretation (RUO only)."""

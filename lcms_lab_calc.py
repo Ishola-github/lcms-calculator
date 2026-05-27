@@ -258,3 +258,111 @@ def evaluate_recovery_pair(
         recovery=classify_recovery(mean_r, rec_lim),
         rpd=classify_rpd(rpd, rpd_lim),
     )
+
+
+# Common salt molar masses (g/mol) for bench prep estimates.
+SALT_MW: dict[str, float] = {
+    "Ammonium acetate": 77.08,
+    "Ammonium formate": 63.06,
+}
+
+# Approximate solvent densities (g/mL) for mass-from-volume estimates.
+SOLVENT_DENSITY: dict[str, float] = {
+    "Water": 1.0,
+    "Methanol (MeOH)": 0.79,
+    "Acetonitrile (ACN)": 0.79,
+}
+
+
+@dataclass(frozen=True)
+class SaltMassResult:
+    salt: str
+    concentration_mm: float
+    volume_ml: float
+    mass_g: float
+    mass_mg: float
+
+
+def salt_mass_for_buffer(
+    salt_name: str,
+    concentration_mm: float,
+    volume_ml: float,
+) -> SaltMassResult:
+    """Mass of ammonium acetate/formate for aqueous buffer (RUO estimate)."""
+    if concentration_mm <= 0 or volume_ml <= 0:
+        raise ValueError("Concentration and volume must be > 0.")
+    mw = SALT_MW.get(salt_name)
+    if mw is None:
+        raise ValueError(f"Unknown salt; choose from {list(SALT_MW)}.")
+    moles = (concentration_mm / 1000.0) * (volume_ml / 1000.0)
+    mass_g = moles * mw
+    return SaltMassResult(
+        salt=salt_name,
+        concentration_mm=concentration_mm,
+        volume_ml=volume_ml,
+        mass_g=mass_g,
+        mass_mg=mass_g * 1000.0,
+    )
+
+
+def ppm_to_mg_per_l(ppm: float) -> float:
+    """Aqueous approximation: ppm ≈ mg/L."""
+    return ppm
+
+
+def organic_aqueous_volumes(
+    total_ml: float,
+    organic_percent: float,
+) -> tuple[float, float]:
+    if total_ml <= 0:
+        raise ValueError("Total volume must be > 0.")
+    if not 0 <= organic_percent <= 100:
+        raise ValueError("Organic percent must be 0–100.")
+    organic_ml = total_ml * organic_percent / 100.0
+    aqueous_ml = total_ml - organic_ml
+    return organic_ml, aqueous_ml
+
+
+@dataclass(frozen=True)
+class MobilePhaseRecipe:
+    title: str
+    steps: tuple[str, ...]
+
+    def as_text(self) -> str:
+        lines = [f"# {self.title}", ""]
+        for i, step in enumerate(self.steps, start=1):
+            lines.append(f"{i}. {step}")
+        return "\n".join(lines)
+
+
+def recipe_meoh_water_with_buffer(
+    total_ml: float,
+    organic_percent: float,
+    organic_solvent: str,
+    buffer_mm: float,
+    buffer_salt: str,
+    buffer_in_aqueous_only: bool = True,
+    additive_note: str = "",
+) -> MobilePhaseRecipe:
+    """Build prep steps for organic/aqueous mobile phase with optional aqueous buffer."""
+    org_ml, aq_ml = organic_aqueous_volumes(total_ml, organic_percent)
+    aq_pct = 100.0 - organic_percent
+    steps: list[str] = []
+    if buffer_mm > 0 and buffer_salt in SALT_MW:
+        buf_vol = aq_ml if buffer_in_aqueous_only else total_ml
+        salt = salt_mass_for_buffer(buffer_salt, buffer_mm, buf_vol)
+        steps.append(
+            f"Weigh **{salt.mass_g:.4f} g** ({salt.mass_mg:.2f} mg) {buffer_salt} "
+            f"into a {buf_vol:.1f} mL volumetric (target **{buffer_mm:g} mM** aqueous)."
+        )
+        steps.append(f"Dissolve and bring aqueous portion to volume with water (~{buf_vol:.1f} mL).")
+    steps.append(f"Measure **{org_ml:.2f} mL** {organic_solvent} ({organic_percent:g}% of {total_ml:g} mL).")
+    steps.append(f"Measure **{aq_ml:.2f} mL** aqueous portion ({aq_pct:g}% of total).")
+    steps.append(f"Combine to **{total_ml:g} mL** final; mix thoroughly and degas per SOP.")
+    if additive_note.strip():
+        steps.append(additive_note.strip())
+    steps.append("Verify against your method SOP before use (RUO workflow guidance).")
+    title = f"{organic_percent:g}:{aq_pct:g} {organic_solvent}/aqueous"
+    if buffer_mm > 0:
+        title += f" + {buffer_mm:g} mM {buffer_salt}"
+    return MobilePhaseRecipe(title=title, steps=tuple(steps))
