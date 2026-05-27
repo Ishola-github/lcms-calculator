@@ -14,6 +14,7 @@ import pandas as pd
 import streamlit as st
 
 from lcms_lab_calc import (
+    BatchPlannerInput,
     QCFlag,
     RecoveryLimits,
     RPDLimits,
@@ -21,12 +22,14 @@ from lcms_lab_calc import (
     calibration_prep_table,
     classify_recovery,
     evaluate_recovery_pair,
+    generate_batch_sequence,
     internal_standard_spike,
     is_spike_with_extraction_note,
     organic_aqueous_volumes,
     ppm_to_mg_per_l,
     recipe_meoh_water_with_buffer,
     salt_mass_for_buffer,
+    sequence_to_records,
     spe_concentration_factor,
 )
 from lcms_presets import (
@@ -93,6 +96,7 @@ with st.sidebar:
     tab_eis,
     tab_mobile,
     tab_recovery,
+    tab_batch,
     tab_qc,
 ) = st.tabs(
     [
@@ -104,6 +108,7 @@ with st.sidebar:
         "EIS / NIS",
         "Mobile phase",
         "Recovery / RPD",
+        "Batch sequence",
         "Batch QC",
     ]
 )
@@ -515,6 +520,106 @@ with tab_recovery:
                 st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
         except ValueError as exc:
             st.error(str(exc))
+
+with tab_batch:
+    st.subheader("Batch sequence planner")
+    st.caption(
+        "**Planning aid / template generator** — editable injection list for bench and LIMS setup. "
+        "Not certified batch sequencing or EPA 1633A compliance automation. "
+        "Manual analyst review required."
+    )
+    plan_batch_id = st.text_input("Batch ID", value="BATCH-001", key="plan_batch_id")
+    template = st.selectbox(
+        "Sequence template",
+        [
+            "1633A-style planning template (RUO)",
+            "Training minimal",
+            "Custom (use checkboxes below)",
+        ],
+        key="seq_template",
+    )
+    col_p1, col_p2 = st.columns(2)
+    with col_p1:
+        n_samples = st.number_input("Number of field samples", min_value=1, value=10, step=1)
+        sample_prefix = st.text_input("Sample ID prefix", value="S")
+        cal_levels = st.number_input("Calibration levels", min_value=1, value=6, step=1)
+    with col_p2:
+        msspd_every = st.number_input(
+            "MS/MSD every N samples (0 = end only)",
+            min_value=0,
+            value=10,
+            step=1,
+            help="1633A-style template: insert MS + MSD pair after every N field samples.",
+        )
+        msspd_end_pairs = st.number_input("MS/MSD pairs at end (if N=0)", min_value=0, value=1, step=1)
+        cont_blank_every = st.number_input(
+            "Continuing blank every N injections (0 = off)",
+            min_value=0,
+            value=0,
+            step=1,
+        )
+    st.markdown("**Include blocks**")
+    b1, b2, b3, b4 = st.columns(4)
+    with b1:
+        inc_ib = st.checkbox("Initial blank", value=True)
+        inc_eb = st.checkbox("End blank", value=True)
+        inc_cal = st.checkbox("Calibration", value=True)
+    with b2:
+        inc_lcs = st.checkbox("LCS", value=True)
+        inc_llopr = st.checkbox("LLOPR", value=False)
+        inc_opr = st.checkbox("OPR", value=False)
+    with b3:
+        inc_ccv_mid = st.checkbox("CCV mid-run", value=True)
+        inc_ccv_end = st.checkbox("CCV end", value=True)
+    with b4:
+        st.caption("1633A-style = planning outline only.")
+
+    if st.button("Generate sequence", type="primary"):
+        cfg = BatchPlannerInput(
+            batch_id=plan_batch_id,
+            cal_levels=int(cal_levels),
+            sample_count=int(n_samples),
+            sample_prefix=sample_prefix.strip() or "S",
+            include_initial_blank=inc_ib,
+            include_end_blank=inc_eb,
+            include_calibration=inc_cal,
+            include_lcs=inc_lcs,
+            include_llopr=inc_llopr,
+            include_opr=inc_opr,
+            msspd_every_n_samples=int(msspd_every),
+            msspd_pairs_at_end=int(msspd_end_pairs),
+            include_ccv_mid=inc_ccv_mid,
+            include_ccv_end=inc_ccv_end,
+            continuing_blank_every=int(cont_blank_every),
+        )
+        try:
+            rows = generate_batch_sequence(cfg, template)
+            st.session_state["batch_sequence_df"] = pd.DataFrame(sequence_to_records(rows))
+        except ValueError as exc:
+            st.error(str(exc))
+
+    if "batch_sequence_df" in st.session_state:
+        st.markdown("**Edit sequence before export** (add/remove rows as needed).")
+        edited = st.data_editor(
+            st.session_state["batch_sequence_df"],
+            num_rows="dynamic",
+            use_container_width=True,
+            key="batch_sequence_editor",
+        )
+        st.session_state["batch_sequence_df"] = edited
+        st.metric("Total injections", len(edited))
+        csv_buf = io.StringIO()
+        edited.to_csv(csv_buf, index=False)
+        st.download_button(
+            "Download sequence CSV",
+            csv_buf.getvalue(),
+            file_name=f"pfas_batch_sequence_{plan_batch_id}.csv",
+            mime="text/csv",
+        )
+        st.info(
+            "Suggested interpretation for planning only. "
+            "Import into your LIMS/instrument method after SOP review."
+        )
 
 with tab_qc:
     st.subheader("Batch QC checklist")

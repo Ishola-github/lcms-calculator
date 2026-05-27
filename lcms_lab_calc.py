@@ -366,3 +366,155 @@ def recipe_meoh_water_with_buffer(
     if buffer_mm > 0:
         title += f" + {buffer_mm:g} mM {buffer_salt}"
     return MobilePhaseRecipe(title=title, steps=tuple(steps))
+
+
+@dataclass(frozen=True)
+class SequenceRow:
+    position: int
+    vial: str
+    sample_type: str
+    role: str
+    notes: str
+
+
+@dataclass(frozen=True)
+class BatchPlannerInput:
+    """Inputs for batch sequence templates (planning aid only)."""
+
+    batch_id: str
+    cal_levels: int = 6
+    sample_count: int = 10
+    sample_prefix: str = "S"
+    include_initial_blank: bool = True
+    include_end_blank: bool = True
+    include_calibration: bool = True
+    include_lcs: bool = True
+    include_llopr: bool = False
+    include_opr: bool = False
+    msspd_every_n_samples: int = 0
+    msspd_pairs_at_end: int = 1
+    include_ccv_mid: bool = True
+    include_ccv_end: bool = True
+    continuing_blank_every: int = 0
+
+
+def _sample_labels(prefix: str, count: int) -> list[str]:
+    return [f"{prefix}-{i:03d}" for i in range(1, count + 1)]
+
+
+def _append_row(
+    rows: list[SequenceRow],
+    vial: str,
+    sample_type: str,
+    role: str,
+    notes: str = "",
+) -> None:
+    rows.append(
+        SequenceRow(
+            position=len(rows) + 1,
+            vial=vial,
+            sample_type=sample_type,
+            role=role,
+            notes=notes,
+        )
+    )
+
+
+def _maybe_continuing_blank(
+    rows: list[SequenceRow],
+    every: int,
+    batch_id: str,
+) -> None:
+    if every <= 0:
+        return
+    if len(rows) > 0 and len(rows) % every == 0:
+        _append_row(
+            rows,
+            f"{batch_id}-CB-{len(rows) + 1:02d}",
+            "Continuing blank",
+            "QC",
+            "Suggested continuing blank interval — confirm per SOP.",
+        )
+
+
+def generate_training_minimal_sequence(cfg: BatchPlannerInput) -> list[SequenceRow]:
+    """Short bracketed sequence for training demos."""
+    rows: list[SequenceRow] = []
+    bid = cfg.batch_id
+    if cfg.include_initial_blank:
+        _append_row(rows, f"{bid}-MB-01", "Method blank", "Blank", "Initial blank")
+    if cfg.include_calibration:
+        for i in range(1, cfg.cal_levels + 1):
+            _append_row(rows, f"{bid}-CAL-{i}", "Calibration", "Cal", f"Level {i}")
+    if cfg.include_lcs:
+        _append_row(rows, f"{bid}-LCS", "LCS", "QC", "Laboratory control sample")
+    for lab in _sample_labels(cfg.sample_prefix, cfg.sample_count):
+        _append_row(rows, lab, "Sample", "Field", "Editable — assign matrix ID in LIMS")
+        _maybe_continuing_blank(rows, cfg.continuing_blank_every, bid)
+    if cfg.include_end_blank:
+        _append_row(rows, f"{bid}-MB-END", "Method blank", "Blank", "End blank")
+    return rows
+
+
+def generate_1633a_planning_sequence(cfg: BatchPlannerInput) -> list[SequenceRow]:
+    """
+    1633A-inspired injection outline for planning (RUO template — not compliance automation).
+    """
+    rows: list[SequenceRow] = []
+    bid = cfg.batch_id
+    disclaimer = "1633A-style planning template; verify sequence against your SOP/method."
+
+    if cfg.include_initial_blank:
+        _append_row(rows, f"{bid}-MB-01", "Method blank", "Blank", "Initial blank · " + disclaimer)
+    if cfg.include_calibration:
+        for i in range(1, cfg.cal_levels + 1):
+            _append_row(rows, f"{bid}-CAL-{i}", "Calibration", "Cal", f"Std level {i}")
+    if cfg.include_lcs:
+        _append_row(rows, f"{bid}-LCS", "LCS", "QC", "Laboratory control sample")
+    if cfg.include_llopr:
+        _append_row(rows, f"{bid}-LLOPR", "LLOPR", "QC", "Lower limit check — label per SOP")
+    if cfg.include_opr:
+        _append_row(rows, f"{bid}-OPR", "OPR", "QC", "Ongoing precision — label per SOP")
+
+    labels = _sample_labels(cfg.sample_prefix, cfg.sample_count)
+    mid = max(len(labels) // 2, 1)
+    for idx, lab in enumerate(labels, start=1):
+        _append_row(rows, lab, "Sample", "Field", "Field / client sample")
+        _maybe_continuing_blank(rows, cfg.continuing_blank_every, bid)
+        if cfg.msspd_every_n_samples > 0 and idx % cfg.msspd_every_n_samples == 0:
+            _append_row(rows, f"{lab}-MS", "Matrix spike", "MS", "Matrix spike (MS)")
+            _append_row(rows, f"{lab}-MSD", "Matrix spike duplicate", "MSD", "Matrix spike duplicate (MSD)")
+        if cfg.include_ccv_mid and idx == mid:
+            _append_row(rows, f"{bid}-CCV-MID", "CCV", "QC", "Mid-run continuing calibration verification")
+    for pair in range(1, cfg.msspd_pairs_at_end + 1):
+        if cfg.msspd_every_n_samples <= 0:
+            _append_row(rows, f"{bid}-MS-{pair:02d}", "Matrix spike", "MS", "End-batch MS pair")
+            _append_row(rows, f"{bid}-MSD-{pair:02d}", "Matrix spike duplicate", "MSD", "End-batch MSD pair")
+    if cfg.include_ccv_end:
+        _append_row(rows, f"{bid}-CCV-END", "CCV", "QC", "End-run CCV")
+    if cfg.include_end_blank:
+        _append_row(rows, f"{bid}-MB-END", "Method blank", "Blank", "End blank")
+    return rows
+
+
+def generate_batch_sequence(cfg: BatchPlannerInput, template: str) -> list[SequenceRow]:
+    if template == "1633A-style planning template (RUO)":
+        return generate_1633a_planning_sequence(cfg)
+    if template == "Training minimal":
+        return generate_training_minimal_sequence(cfg)
+    if template == "Custom (use checkboxes below)":
+        return generate_1633a_planning_sequence(cfg)
+    raise ValueError(f"Unknown template: {template}")
+
+
+def sequence_to_records(rows: list[SequenceRow]) -> list[dict[str, object]]:
+    return [
+        {
+            "Position": r.position,
+            "Vial": r.vial,
+            "Type": r.sample_type,
+            "Role": r.role,
+            "Notes": r.notes,
+        }
+        for r in rows
+    ]

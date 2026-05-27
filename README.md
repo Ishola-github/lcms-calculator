@@ -25,7 +25,7 @@ This utility is intentionally separate from governed reproducibility workflows a
 
 - **Recovery PASS/WARN/FAIL** — configurable limits, suggested interpretation (RUO; review per SOP)
 - **Mobile phase chemistry** — NH₄OAc / ammonium formate mass (mM), MeOH/ACN %, ppm↔mg/L, recipe text
-- *Planned:* batch sequence planner
+- **Batch sequence planner** — editable 1633A-style / training templates; CSV export (planning aid only)
 
 ## Scientific positioning
 
