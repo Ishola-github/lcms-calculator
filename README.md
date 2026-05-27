@@ -42,6 +42,22 @@ python -m streamlit run pfas_lcmsms_calculator_app.py
 
 Open http://localhost:8501
 
+## Screenshots
+
+| C1V1 dilution | Sample spiking |
+|:---:|:---:|
+| ![C1V1 dilution](screenshots/01_c1v1_dilution.png) | ![Sample spiking](screenshots/02_sample_spiking.png) |
+
+| EIS / NIS | Mobile phase |
+|:---:|:---:|
+| ![EIS / NIS](screenshots/03_eis_nis.png) | ![Mobile phase](screenshots/04_mobile_phase.png) |
+
+| Recovery / RPD | Batch QC |
+|:---:|:---:|
+| ![Recovery / RPD](screenshots/05_recovery_rpd.png) | ![Batch QC](screenshots/06_batch_qc.png) |
+
+Full-width overview: `screenshots/00_overview_c1v1.png`. See [screenshots/README.md](screenshots/README.md) for filenames and optional regeneration steps.
+
 ## Repository layout
 
 ```text
@@ -50,17 +66,8 @@ lcms_calculator/
 ├── requirements.txt
 ├── README.md
 ├── examples/
-└── screenshots/
-```
-
-## Screenshots (optional)
-
-Add UI captures under `screenshots/`, then:
-
-```powershell
-git add screenshots
-git commit -m "Add screenshots and usage instructions"
-git push
+├── screenshots/
+└── scripts/          # optional dev utilities (screenshot capture)
 ```
 
 Do **not** run `git add .` inside `pfas-toxicology/pfas-toxicology`.
