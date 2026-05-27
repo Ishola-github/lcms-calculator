@@ -11,13 +11,17 @@ This utility is intentionally separate from governed reproducibility workflows a
 
 ## Features
 
+**Phase 1 — laboratory workflow helpers**
+
 - C1V1 dilution calculator
-- PFAS spiking helper with **analyte presets** (PFOA, PFOS, PFHxS, GenX, etc.)
-- **Unit helper** (ng/L, µg/L, ng/mL, µg/mL, mg/L, pg/mL)
-- EIS/NIS preparation logic
-- Recovery and RPD calculations
-- Mobile phase preparation helper
-- Batch QC checklist and CSV export
+- PFAS **analyte presets** (PFOS, PFOA, PFHxS, PFNA, PFBS, GenX) — MW, calibration range, suggested IS
+- **SPE concentration factor** + sample-equivalent back-calculation
+- **Calibration prep table** (ng/L levels → stock µL + diluent) with CSV export
+- **Internal standard spiking** (MPFAC-MXA / Wellington-style starting values)
+- Sample spiking + **unit helper** (ng/L ↔ ng/mL ↔ µg/L, etc.)
+- EIS/NIS response check, recovery/RPD, mobile phase, batch QC CSV
+
+**Phase 2+ (planned):** batch sequence planner, QC pass/warn/fail dashboard, mobile phase recipes
 
 ## Scientific positioning
 

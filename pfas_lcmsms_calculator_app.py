@@ -13,9 +13,18 @@ from datetime import datetime, timezone
 import pandas as pd
 import streamlit as st
 
+from lcms_lab_calc import (
+    calibration_prep_table,
+    internal_standard_spike,
+    is_spike_with_extraction_note,
+    spe_concentration_factor,
+)
 from lcms_presets import (
     ANALYTE_PRESETS,
     CONC_UNIT_OPTIONS,
+    DEFAULT_CAL_LEVELS_NG_L,
+    IS_PRESET_BY_NAME,
+    IS_PRESETS,
     PRESET_BY_NAME,
     convert_concentration,
     format_conc,
@@ -25,8 +34,8 @@ st.set_page_config(page_title="PFAS LC-MS/MS Prep Helper", layout="wide")
 
 st.title("PFAS LC-MS/MS preparation helper")
 st.caption(
-    "Optional helper for standards, spiking, mobile phase, and QC planning. "
-    "Research/training use only; not a validated regulatory reporting system."
+    "Workflow helper for standards, SPE, spiking, calibration, and QC planning. "
+    "Research/training use only — not EPA/ISO certified; not for regulatory submission."
 )
 
 with st.sidebar:
@@ -35,25 +44,23 @@ with st.sidebar:
     selected_preset = st.selectbox("Common PFAS analyte", preset_names, key="analyte_preset")
     if selected_preset != "Custom / manual":
         preset = PRESET_BY_NAME[selected_preset]
-        st.caption(f"**CAS:** {preset.cas}")
+        st.caption(f"**CAS:** {preset.cas} · **MW:** {preset.molecular_weight:g} g/mol")
         st.caption(preset.notes)
-        st.info(
-            f"Suggested starting points (verify against your SOP): "
-            f"stock **{preset.typical_stock_ng_ml:g} ng/mL**, "
-            f"target spike **{preset.typical_spike_ng_ml:g} ng/mL** in sample."
+        st.markdown(
+            f"| | |\n|---|---|\n"
+            f"| **Calibration range** | {preset.cal_range_low_ng_l:g}–{preset.cal_range_high_ng_l:g} ng/L |\n"
+            f"| **Suggested IS** | {preset.suggested_is} |\n"
+            f"| **Typical stock** | {preset.typical_stock_ng_ml:g} ng/mL |\n"
+            f"| **Typical spike** | {preset.typical_spike_ng_ml:g} ng/mL in sample |"
         )
-        apply_defaults = st.button("Apply suggested spike values")
-        if apply_defaults:
+        if st.button("Apply preset to spiking + calibration"):
             st.session_state["spike_stock_ng_ml"] = float(preset.typical_stock_ng_ml)
             st.session_state["target_spike_ng_ml"] = float(preset.typical_spike_ng_ml)
-            spike_u = st.session_state.get("spike_unit", "ng/mL")
-            if spike_u in CONC_UNIT_OPTIONS:
-                st.session_state["spike_stock_input"] = convert_concentration(
-                    preset.typical_stock_ng_ml, "ng/mL", spike_u
-                )
-                st.session_state["target_spike_input"] = convert_concentration(
-                    preset.typical_spike_ng_ml, "ng/mL", spike_u
-                )
+            st.session_state["cal_stock_ng_ml"] = float(preset.typical_stock_ng_ml)
+            st.session_state["cal_levels_text"] = ", ".join(
+                str(x) for x in DEFAULT_CAL_LEVELS_NG_L
+                if preset.cal_range_low_ng_l <= x <= preset.cal_range_high_ng_l
+            ) or f"{preset.cal_range_low_ng_l}, {preset.cal_range_high_ng_l}"
 
     st.divider()
     st.subheader("Unit helper")
@@ -67,10 +74,23 @@ with st.sidebar:
     else:
         st.write(format_conc(uh_value, uh_from))
 
-tab_c1v1, tab_spike, tab_eis, tab_mobile, tab_recovery, tab_qc = st.tabs(
+(
+    tab_c1v1,
+    tab_spike,
+    tab_spe,
+    tab_cal,
+    tab_is,
+    tab_eis,
+    tab_mobile,
+    tab_recovery,
+    tab_qc,
+) = st.tabs(
     [
         "C1V1 dilution",
         "Sample spiking",
+        "SPE factor",
+        "Calibration prep",
+        "Internal standard",
         "EIS / NIS",
         "Mobile phase",
         "Recovery / RPD",
@@ -88,18 +108,13 @@ with tab_c1v1:
         v1 = (c2 * v2) / c1
         st.success(f"Add stock volume V1 = **{v1:.6g}** (same units as V2)")
         st.info(f"Diluent volume ≈ **{max(v2 - v1, 0):.6g}** (if V1 ≤ V2)")
-        if c1_unit != "ng/mL":
-            st.caption(
-                f"C2 in ng/mL ≈ **{convert_concentration(c2, c1_unit, 'ng/mL'):.6g}** "
-                f"(unit helper reference only)."
-            )
     else:
         st.warning("C1 and C2 must be > 0.")
 
 with tab_spike:
     st.subheader("Sample spiking")
     if selected_preset != "Custom / manual":
-        st.caption(f"Preset context: **{selected_preset}**")
+        st.caption(f"Preset: **{selected_preset}**")
     spike_unit = st.selectbox("Concentration units", CONC_UNIT_OPTIONS, index=2, key="spike_unit")
     sample_vol = st.number_input("Sample volume (mL)", min_value=0.0, value=1.0, format="%.6g")
     default_stock = float(st.session_state.get("spike_stock_ng_ml", 1000.0))
@@ -127,21 +142,149 @@ with tab_spike:
             f"Spike volume ≈ **{spike_vol_ul:.3f} µL** into {sample_vol} mL sample "
             f"({format_conc(target_ng_ml, 'ng/mL')} in sample)."
         )
-        if spike_unit != "ng/L":
-            st.caption(
-                f"Target ≈ **{convert_concentration(target_conc, spike_unit, 'ng/L'):.6g} ng/L**."
+
+with tab_spe:
+    st.subheader("SPE concentration factor")
+    st.caption(
+        "Relates original sample volume to final extract volume. "
+        "Use your SOP for recovery and unit reporting."
+    )
+    col1, col2 = st.columns(2)
+    with col1:
+        spe_sample_ml = st.number_input("Sample volume (mL)", min_value=0.0, value=250.0, key="spe_sample")
+    with col2:
+        spe_final_ml = st.number_input("Final extract volume (mL)", min_value=0.0, value=1.0, key="spe_final")
+    spe_dilution = st.number_input(
+        "Post-extract dilution factor (1 = none)",
+        min_value=0.0,
+        value=1.0,
+        format="%.6g",
+        key="spe_dilution",
+    )
+    spe_measured = st.number_input(
+        "Optional: measured concentration in final solvent (ng/L)",
+        min_value=0.0,
+        value=0.0,
+        format="%.6g",
+        help="Enter to back-calculate sample-equivalent concentration.",
+    )
+    if spe_sample_ml > 0 and spe_final_ml > 0 and spe_dilution > 0:
+        spe = spe_concentration_factor(spe_sample_ml, spe_final_ml, spe_dilution)
+        st.metric("Concentration factor (CF)", f"{spe.concentration_factor:.4g}")
+        st.metric("Effective reporting divisor", f"{spe.effective_reporting_divisor:.4g}")
+        st.info(
+            f"**{spe_sample_ml:g} mL** sample → **{spe_final_ml:g} mL** extract "
+            f"{'(no post-dilution)' if spe_dilution == 1 else f'× {spe_dilution:g} post-dilution'}."
+        )
+        if spe_measured > 0:
+            sample_eq = spe.sample_equivalent_ng_l(spe_measured)
+            st.success(
+                f"Sample-equivalent concentration ≈ **{sample_eq:.4g} ng/L** "
+                f"(from {spe_measured:g} ng/L in final solvent)."
             )
     else:
-        st.warning("All inputs must be > 0.")
+        st.warning("Sample volume, final extract volume, and dilution factor must be > 0.")
+
+with tab_cal:
+    st.subheader("Calibration curve preparation table")
+    st.caption("Aqueous standards in ng/L; stock in ng/mL. Verify against your SOP.")
+    if selected_preset != "Custom / manual":
+        p = PRESET_BY_NAME[selected_preset]
+        st.caption(
+            f"**{selected_preset}** suggested range: "
+            f"{p.cal_range_low_ng_l:g}–{p.cal_range_high_ng_l:g} ng/L"
+        )
+    cal_stock = st.number_input(
+        "Stock concentration (ng/mL)",
+        min_value=0.0,
+        value=float(st.session_state.get("cal_stock_ng_ml", 1000.0)),
+        key="cal_stock_input",
+    )
+    cal_final_ml = st.number_input("Final volume per standard (mL)", min_value=0.0, value=10.0)
+    default_levels = st.session_state.get(
+        "cal_levels_text",
+        ", ".join(str(x) for x in DEFAULT_CAL_LEVELS_NG_L),
+    )
+    cal_levels_text = st.text_input(
+        "Target levels (ng/L), comma-separated",
+        value=default_levels,
+        key="cal_levels_input",
+    )
+    if st.button("Generate calibration table", type="primary"):
+        try:
+            targets = [float(x.strip()) for x in cal_levels_text.split(",") if x.strip()]
+            rows = calibration_prep_table(targets, cal_stock, cal_final_ml)
+            df = pd.DataFrame(
+                [
+                    {
+                        "Level": r.level_id,
+                        "Target (ng/L)": r.target_ng_l,
+                        "Stock volume (µL)": round(r.stock_volume_ul, 3),
+                        "Diluent (mL)": round(r.diluent_volume_ml, 4),
+                        "Final volume (mL)": r.final_volume_ml,
+                    }
+                    for r in rows
+                ]
+            )
+            st.dataframe(df, use_container_width=True, hide_index=True)
+            buf = io.StringIO()
+            df.to_csv(buf, index=False)
+            st.download_button(
+                "Download calibration prep CSV",
+                buf.getvalue(),
+                file_name="pfas_calibration_prep.csv",
+                mime="text/csv",
+            )
+        except ValueError as exc:
+            st.error(str(exc))
+
+with tab_is:
+    st.subheader("Internal standard spiking")
+    st.caption("Isotope dilution / IS spike volume calculator (RUO defaults).")
+    is_preset_name = st.selectbox(
+        "IS mix preset (starting values)",
+        [p.name for p in IS_PRESETS],
+        key="is_preset",
+    )
+    is_preset = IS_PRESET_BY_NAME[is_preset_name]
+    if selected_preset != "Custom / manual":
+        st.caption(f"Analyte context: **{PRESET_BY_NAME[selected_preset].suggested_is}**")
+    col_a, col_b = st.columns(2)
+    with col_a:
+        is_sample_ml = st.number_input("Sample volume (mL)", min_value=0.0, value=250.0, key="is_sample")
+        is_stock = st.number_input(
+            "IS stock concentration (ng/mL)",
+            min_value=0.0,
+            value=float(is_preset.typical_stock_ng_ml),
+        )
+    with col_b:
+        is_target = st.number_input(
+            "Target IS in sample (ng/mL)",
+            min_value=0.0,
+            value=float(is_preset.typical_target_ng_ml),
+        )
+        link_spe = st.checkbox("Include SPE pre-spike note (use SPE tab volumes)", value=False)
+    if is_sample_ml > 0 and is_stock > 0 and is_target > 0:
+        spike = internal_standard_spike(is_sample_ml, is_stock, is_target)
+        spe_ctx = None
+        if link_spe and st.session_state.get("spe_sample", 0) > 0:
+            try:
+                spe_ctx = spe_concentration_factor(
+                    float(st.session_state["spe_sample"]),
+                    float(st.session_state.get("spe_final", 1.0)),
+                    float(st.session_state.get("spe_dilution", 1.0)),
+                )
+            except ValueError:
+                spe_ctx = None
+        st.success(is_spike_with_extraction_note(spike, spe_ctx))
+        st.caption(is_preset.notes)
+    else:
+        st.warning("Sample volume, stock, and target must be > 0.")
 
 with tab_eis:
-    st.subheader("EIS / NIS spiking logic")
+    st.subheader("EIS / NIS response check")
     if selected_preset != "Custom / manual":
-        st.caption(f"Working analyte: **{selected_preset}** (labels only; enter your responses below).")
-    st.markdown(
-        "Enter native, EIS, and NIS areas (or concentrations) for one analyte. "
-        "Recovery uses EIS; qualitative check compares NIS response."
-    )
+        st.caption(f"Working analyte: **{selected_preset}**")
     eis_unit = st.selectbox("Response / concentration units", CONC_UNIT_OPTIONS, index=0, key="eis_unit")
     native = st.number_input("Native response", min_value=0.0, value=1000.0)
     eis = st.number_input("EIS response", min_value=0.0, value=950.0)
@@ -152,12 +295,11 @@ with tab_eis:
         value=1000.0,
     )
     if eis_theoretical > 0:
-        eis_recovery = 100.0 * eis / eis_theoretical
-        st.metric("EIS recovery (%)", f"{eis_recovery:.1f}")
+        st.metric("EIS recovery (%)", f"{100.0 * eis / eis_theoretical:.1f}")
     if native > 0:
         st.metric("EIS/native ratio", f"{eis / native:.3f}")
         st.metric("NIS/native ratio", f"{nis / native:.3f}")
-    st.caption("Interpret against your SOP limits; this tool does not apply method-specific acceptance criteria.")
+    st.caption("Interpret against your SOP; no method-specific acceptance criteria applied.")
 
 with tab_mobile:
     st.subheader("Mobile phase preparation")
@@ -165,35 +307,26 @@ with tab_mobile:
     pct_a = st.slider("Organic fraction A (%)", 0.0, 100.0, 20.0)
     pct_b = 100.0 - pct_a
     if total_ml > 0:
-        vol_a = total_ml * pct_a / 100.0
-        vol_b = total_ml * pct_b / 100.0
-        st.write(f"Component A: **{vol_a:.2f} mL** ({pct_a:.1f}%)")
-        st.write(f"Component B: **{vol_b:.2f} mL** ({pct_b:.1f}%)")
+        st.write(f"Component A: **{total_ml * pct_a / 100.0:.2f} mL** ({pct_a:.1f}%)")
+        st.write(f"Component B: **{total_ml * pct_b / 100.0:.2f} mL** ({pct_b:.1f}%)")
     additive_ul = st.number_input("Additive (e.g. ammonium acetate) µL per L", min_value=0.0, value=0.0)
     if total_ml > 0 and additive_ul > 0:
         st.write(f"Additive volume: **{additive_ul * total_ml / 1000.0:.3f} µL** for {total_ml} mL")
 
 with tab_recovery:
     st.subheader("Recovery and RPD")
-    st.markdown("Duplicate spike recoveries and relative percent difference (RPD).")
     rec_unit = st.selectbox("Measured value units", CONC_UNIT_OPTIONS + ["% recovery"], index=0, key="rec_unit")
     rep1 = st.number_input("Replicate 1 measured", value=95.0)
     rep2 = st.number_input("Replicate 2 measured", value=102.0)
     nominal = st.number_input("Nominal / expected", value=100.0)
-    if rec_unit == "% recovery":
-        if nominal != 0:
+    if nominal != 0 and (rep1 + rep2):
+        if rec_unit == "% recovery":
             mean_r = (rep1 + rep2) / 2.0
-            rpd = abs(rep1 - rep2) / ((rep1 + rep2) / 2.0) * 100.0 if (rep1 + rep2) else 0.0
-            st.metric("Mean recovery (%)", f"{mean_r:.1f}")
-            st.metric("RPD (%)", f"{rpd:.1f}")
-    elif nominal != 0:
-        r1 = 100.0 * rep1 / nominal
-        r2 = 100.0 * rep2 / nominal
-        mean_r = (r1 + r2) / 2.0
-        rpd = abs(rep1 - rep2) / ((rep1 + rep2) / 2.0) * 100.0 if (rep1 + rep2) else 0.0
+        else:
+            mean_r = (100.0 * rep1 / nominal + 100.0 * rep2 / nominal) / 2.0
+        rpd = abs(rep1 - rep2) / ((rep1 + rep2) / 2.0) * 100.0
         st.metric("Mean recovery (%)", f"{mean_r:.1f}")
         st.metric("RPD (%)", f"{rpd:.1f}")
-        st.caption(f"Nominal in ng/L ≈ **{convert_concentration(nominal, rec_unit, 'ng/L'):.6g}**.")
 
 with tab_qc:
     st.subheader("Batch QC checklist")
