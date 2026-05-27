@@ -58,6 +58,17 @@ Screen recording instructions: [docs/DEMO_MEDIA.md](docs/DEMO_MEDIA.md). Add `do
 
 Do **not** cite the serum reproducibility Zenodo DOI (`10.5281/zenodo.20348369`) for this tool. When published, cite this repository’s **own** tag and Zenodo DOI — see [docs/ZENODO_DOI_WORKFLOW.md](docs/ZENODO_DOI_WORKFLOW.md).
 
+## Verify in Linux / Docker
+
+WSL or Ubuntu: [docs/VERIFY_LINUX_DOCKER.md](docs/VERIFY_LINUX_DOCKER.md)
+
+Quick smoke test:
+
+```powershell
+docker build -t lcms-calculator-verify .
+docker run --rm lcms-calculator-verify
+```
+
 ## Setup
 
 ```powershell

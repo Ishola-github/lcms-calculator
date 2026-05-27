@@ -1,8 +1,7 @@
 .venv/
 .venv-linux/
+.git/
 __pycache__/
 *.pyc
-.streamlit/secrets.toml
-.streamlit/credentials.toml
 .DS_Store
 Thumbs.db
