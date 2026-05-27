@@ -12,7 +12,8 @@ This utility is intentionally separate from governed reproducibility workflows a
 ## Features
 
 - C1V1 dilution calculator
-- PFAS spiking helper
+- PFAS spiking helper with **analyte presets** (PFOA, PFOS, PFHxS, GenX, etc.)
+- **Unit helper** (ng/L, µg/L, ng/mL, µg/mL, mg/L, pg/mL)
 - EIS/NIS preparation logic
 - Recovery and RPD calculations
 - Mobile phase preparation helper
@@ -35,9 +36,11 @@ Repository: https://github.com/Ishola-github/lcms-calculator
 ```powershell
 cd C:\Users\techj\Downloads\lcms_calculator
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python -m streamlit run pfas_lcmsms_calculator_app.py
+# If Activate.ps1 is blocked, use either:
+#   Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+#   .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m streamlit run pfas_lcmsms_calculator_app.py
 ```
 
 Open http://localhost:8501
