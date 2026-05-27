@@ -21,7 +21,10 @@ This utility is intentionally separate from governed reproducibility workflows a
 - Sample spiking + **unit helper** (ng/L ↔ ng/mL ↔ µg/L, etc.)
 - EIS/NIS response check, recovery/RPD, mobile phase, batch QC CSV
 
-**Phase 2+ (planned):** batch sequence planner, QC pass/warn/fail dashboard, mobile phase recipes
+**Phase 2 (in progress)**
+
+- **Recovery PASS/WARN/FAIL** — configurable limits, suggested interpretation (RUO; review per SOP)
+- *Planned:* mobile phase chemistry helper, batch sequence planner
 
 ## Scientific positioning
 

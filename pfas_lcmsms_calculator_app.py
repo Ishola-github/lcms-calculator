@@ -14,7 +14,12 @@ import pandas as pd
 import streamlit as st
 
 from lcms_lab_calc import (
+    QCFlag,
+    RecoveryLimits,
+    RPDLimits,
     calibration_prep_table,
+    classify_recovery,
+    evaluate_recovery_pair,
     internal_standard_spike,
     is_spike_with_extraction_note,
     spe_concentration_factor,
@@ -313,20 +318,114 @@ with tab_mobile:
     if total_ml > 0 and additive_ul > 0:
         st.write(f"Additive volume: **{additive_ul * total_ml / 1000.0:.3f} µL** for {total_ml} mL")
 
+def _render_qc_flag(label: str, flagged) -> None:
+    """Color-coded suggested interpretation (RUO only)."""
+    flag = flagged.flag
+    text = (
+        f"**{label} — suggested: {flag.value}**  \n"
+        f"{flagged.value:.1f}% · {flagged.detail}"
+    )
+    if flag == QCFlag.PASS:
+        st.success(text)
+    elif flag == QCFlag.WARN:
+        st.warning(text)
+    else:
+        st.error(text)
+
+
 with tab_recovery:
-    st.subheader("Recovery and RPD")
-    rec_unit = st.selectbox("Measured value units", CONC_UNIT_OPTIONS + ["% recovery"], index=0, key="rec_unit")
+    st.subheader("Recovery, RPD, and suggested QC flags")
+    st.caption(
+        "RUO workflow guidance only. **Suggested interpretation** — "
+        "review against your laboratory SOP. Not an EPA acceptance engine or validated QC adjudicator."
+    )
+    rec_limits = RecoveryLimits()
+    rpd_limits = RPDLimits()
+    with st.expander("Configure limits (per laboratory SOP)", expanded=False):
+        st.markdown("**Recovery (%):** PASS and WARN bands (inclusive).")
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            pass_low = st.number_input("PASS low", value=70.0, key="rec_pass_lo")
+        with c2:
+            pass_high = st.number_input("PASS high", value=130.0, key="rec_pass_hi")
+        with c3:
+            warn_low = st.number_input("WARN low", value=50.0, key="rec_warn_lo")
+        with c4:
+            warn_high = st.number_input("WARN high", value=150.0, key="rec_warn_hi")
+        st.markdown("**RPD (%):** upper limits for PASS and WARN.")
+        r1, r2 = st.columns(2)
+        with r1:
+            rpd_pass = st.number_input("PASS max RPD", value=20.0, key="rpd_pass")
+        with r2:
+            rpd_warn = st.number_input("WARN max RPD", value=30.0, key="rpd_warn")
+        try:
+            rec_limits = RecoveryLimits(pass_low, pass_high, warn_low, warn_high)
+            rpd_limits = RPDLimits(rpd_pass, rpd_warn)
+            rec_limits.validate()
+            rpd_limits.validate()
+        except ValueError as exc:
+            st.error(str(exc))
+    rec_unit = st.selectbox("Measured value units", CONC_UNIT_OPTIONS + ["% recovery"], index=4, key="rec_unit")
+    qc_label = st.text_input("QC sample label (optional)", value="Matrix spike duplicate")
     rep1 = st.number_input("Replicate 1 measured", value=95.0)
     rep2 = st.number_input("Replicate 2 measured", value=102.0)
     nominal = st.number_input("Nominal / expected", value=100.0)
     if nominal != 0 and (rep1 + rep2):
-        if rec_unit == "% recovery":
-            mean_r = (rep1 + rep2) / 2.0
-        else:
-            mean_r = (100.0 * rep1 / nominal + 100.0 * rep2 / nominal) / 2.0
-        rpd = abs(rep1 - rep2) / ((rep1 + rep2) / 2.0) * 100.0
-        st.metric("Mean recovery (%)", f"{mean_r:.1f}")
-        st.metric("RPD (%)", f"{rpd:.1f}")
+        try:
+            result = evaluate_recovery_pair(
+                rep1,
+                rep2,
+                nominal,
+                values_are_percent_recovery=(rec_unit == "% recovery"),
+                recovery_limits=rec_limits,
+                rpd_limits=rpd_limits,
+            )
+            st.metric("Replicate 1 recovery (%)", f"{result.replicate_1_pct:.1f}")
+            st.metric("Replicate 2 recovery (%)", f"{result.replicate_2_pct:.1f}")
+            st.metric("Mean recovery (%)", f"{result.mean_recovery_pct:.1f}")
+            st.metric("RPD (%)", f"{result.rpd_pct:.1f}")
+            _render_qc_flag("Mean recovery", result.recovery)
+            _render_qc_flag("RPD", result.rpd)
+            st.info(
+                "Manual analyst review required. Adjust limits in the expander to match your SOP "
+                "(e.g. LCS, MS/MSD, IS recovery)."
+            )
+        except ValueError as exc:
+            st.error(str(exc))
+
+    st.divider()
+    st.markdown("**Batch QC entries** (optional table)")
+    batch_labels = st.text_input(
+        "Labels (comma-separated)",
+        value="LCS, MS/MSD rep1, MS/MSD rep2",
+        key="rec_batch_labels",
+    )
+    batch_recoveries = st.text_input(
+        "Recovery values (%, comma-separated)",
+        value="98, 102, 88",
+        key="rec_batch_vals",
+    )
+    if st.button("Evaluate batch recoveries"):
+        try:
+            labels = [x.strip() for x in batch_labels.split(",") if x.strip()]
+            values = [float(x.strip()) for x in batch_recoveries.split(",") if x.strip()]
+            if len(labels) != len(values):
+                st.warning("Label count must match recovery value count.")
+            else:
+                rows = []
+                for lab, val in zip(labels, values):
+                    flagged = classify_recovery(val, rec_limits)
+                    rows.append(
+                        {
+                            "Sample": lab,
+                            "Recovery (%)": val,
+                            "Suggested": flagged.flag.value,
+                            "Note": flagged.detail,
+                        }
+                    )
+                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        except ValueError as exc:
+            st.error(str(exc))
 
 with tab_qc:
     st.subheader("Batch QC checklist")
