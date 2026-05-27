@@ -1,6 +1,13 @@
 # PFAS LC-MS/MS preparation helper
 
-Research/training utility for LC-MS/MS preparation calculations.
+Research-use-only (RUO) LC-MS/MS preparation helper for PFAS workflows, standards preparation, spiking calculations, QC planning, and laboratory support.
+
+This utility is intentionally separate from governed reproducibility workflows and frozen analytical releases.
+
+**Not EPA-certified.**  
+**Not ISO-certified software.**  
+**Not intended for regulatory submission.**  
+**Not a validated reporting platform.**
 
 ## Features
 
@@ -11,8 +18,6 @@ Research/training utility for LC-MS/MS preparation calculations.
 - Mobile phase preparation helper
 - Batch QC checklist and CSV export
 
-This tool is **not** a validated regulatory reporting system and is **separate** from governed PFAS reproducibility releases (PFAS Enterprise 5.0 serum program).
-
 ## Scientific positioning
 
 | This calculator | Governed serum release (separate repo) |
@@ -22,6 +27,8 @@ This tool is **not** a validated regulatory reporting system and is **separate**
 | Optional workflow support | Provenance + blind verification |
 
 Do **not** cite the serum reproducibility Zenodo DOI for this tool. If you publish this calculator later, use its **own** repository tag and DOI (e.g. `lcms-tools-v1.0.0`).
+
+Repository: https://github.com/Ishola-github/lcms-calculator
 
 ## Setup
 
@@ -46,14 +53,14 @@ lcms_calculator/
 └── screenshots/
 ```
 
-## Optional separate Git repo
+## Screenshots (optional)
+
+Add UI captures under `screenshots/`, then:
 
 ```powershell
-cd C:\Users\techj\Downloads\lcms_calculator
-git init
-git add README.md requirements.txt pfas_lcmsms_calculator_app.py .gitignore
-git commit -m "Initial LC-MS preparation helper (RUO)"
-# git remote add origin https://github.com/Ishola-github/lcms-calculator
+git add screenshots
+git commit -m "Add screenshots and usage instructions"
+git push
 ```
 
 Do **not** run `git add .` inside `pfas-toxicology/pfas-toxicology`.
