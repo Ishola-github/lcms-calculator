@@ -1,6 +1,6 @@
 # PFAS LC-MS/MS preparation helper
 
-[![Release](https://img.shields.io/github/v/tag/Ishola-github/lcms-calculator?label=lcms-tools-v1.0.1)](https://github.com/Ishola-github/lcms-calculator/releases/tag/lcms-tools-v1.0.1)
+[![Release](https://img.shields.io/github/v/tag/Ishola-github/lcms-calculator?label=lcms-tools-v1.0.3)](https://github.com/Ishola-github/lcms-calculator/releases/tag/lcms-tools-v1.0.3)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Research-use-only (RUO) LC-MS/MS preparation helper for PFAS workflows, standards preparation, spiking calculations, QC planning, and laboratory support.
@@ -19,6 +19,8 @@ Repository: https://github.com/Ishola-github/lcms-calculator
 [Launch Streamlit App](https://lcms-calculator.streamlit.app/)
 
 Research/training deployment only. Manual analyst review required; not a regulatory service.
+
+Live URL (RUO): `ADD_STREAMLIT_APP_URL_HERE`
 
 ## Demo media
 
@@ -103,7 +105,7 @@ After Zenodo publish, use the DOI from [docs/ZENODO_DOI_WORKFLOW.md](docs/ZENODO
 ```bibtex
 @software{lcms_calculator_2026,
   title = {PFAS LC-MS/MS Preparation Helper (RUO)},
-  version = {lcms-tools-v1.0.0},
+  version = {lcms-tools-v1.0.3},
   url = {https://github.com/Ishola-github/lcms-calculator},
   doi = {10.5281/zenodo.XXXXXXX}
 }
