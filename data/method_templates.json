@@ -1,0 +1,111 @@
+{
+  "version": "1.0.0",
+  "ruo_notice": "Research/training workflow guidance only. Manual analyst review required.",
+  "templates": [
+    {
+      "id": "urine_benzo_lcmsms_v1",
+      "name": "Urine Benzodiazepines (confirmation)",
+      "matrix": "urine",
+      "panel": "benzodiazepines",
+      "instrument": "LC-MS/MS",
+      "prep": {
+        "strategy": "SPE",
+        "product_family": "Strata-X Drug B",
+        "steps": [
+          "Condition cartridge",
+          "Load buffered sample",
+          "Wash to remove matrix interferences",
+          "Elute analytes with organic solvent",
+          "Evaporate and reconstitute"
+        ]
+      },
+      "chromatography": {
+        "column": "Kinetex Biphenyl",
+        "mobile_phase_a": "Water + 0.1% formic acid",
+        "mobile_phase_b": "Methanol + 0.1% formic acid",
+        "flow_ml_min": 0.5,
+        "temperature_c": 35,
+        "runtime_min": 6.0,
+        "gradient_summary": "5% B to 95% B"
+      },
+      "ms": {
+        "ion_mode": "ESI+",
+        "acquisition": "MRM",
+        "notes": "Transitions are method/instrument-specific; verify in SOP."
+      },
+      "targets": [
+        "Alprazolam",
+        "Diazepam",
+        "Oxazepam",
+        "Temazepam"
+      ],
+      "validation_targets": {
+        "recovery_pct_min": 80,
+        "cv_pct_max": 15,
+        "lloq_ng_ml_max": 1
+      },
+      "limitations": [
+        "Not validated for regulatory submission",
+        "Requires matrix-specific verification",
+        "Instrument tuning and transitions must be confirmed locally"
+      ],
+      "references": [
+        {
+          "type": "vendor_guide",
+          "title": "Phenomenex Toxicology LC/MS/MS Guide",
+          "note": "Workflow inspiration only"
+        }
+      ]
+    },
+    {
+      "id": "whole_blood_peth_v1",
+      "name": "Whole blood PEth 16:0/18:1",
+      "matrix": "whole blood",
+      "panel": "peth",
+      "instrument": "LC-MS/MS",
+      "prep": {
+        "strategy": "SLE",
+        "product_family": "Novum SLE",
+        "steps": [
+          "Protein precipitation / pre-cleanup per SOP",
+          "Load sample onto SLE support",
+          "Elute with organic solvent",
+          "Evaporate and reconstitute for LC-MS/MS"
+        ]
+      },
+      "chromatography": {
+        "column": "Luna Omega Polar C18",
+        "mobile_phase_a": "Water + additive per SOP",
+        "mobile_phase_b": "Methanol",
+        "flow_ml_min": 0.4,
+        "temperature_c": 35,
+        "runtime_min": 8.0,
+        "gradient_summary": "Method-specific gradient for PEth species"
+      },
+      "ms": {
+        "ion_mode": "ESI-",
+        "acquisition": "MRM",
+        "notes": "Focus target: PEth 16:0/18:1."
+      },
+      "targets": [
+        "PEth 16:0/18:1"
+      ],
+      "validation_targets": {
+        "recovery_pct_min": 75,
+        "cv_pct_max": 15,
+        "lloq_ng_ml_max": 20
+      },
+      "limitations": [
+        "Requires matrix controls and carryover checks",
+        "Clinical interpretation thresholds are policy-dependent"
+      ],
+      "references": [
+        {
+          "type": "vendor_guide",
+          "title": "Phenomenex Toxicology LC/MS/MS Guide",
+          "note": "Workflow inspiration only"
+        }
+      ]
+    }
+  ]
+}

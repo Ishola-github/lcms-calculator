@@ -42,6 +42,7 @@ Screen recording instructions: [docs/DEMO_MEDIA.md](docs/DEMO_MEDIA.md). Add `do
 - **Recovery PASS/WARN/FAIL** — configurable limits, *suggested interpretation* (RUO; review per SOP)
 - **Mobile phase chemistry** — NH₄OAc / ammonium formate mass (mM), MeOH/ACN %, ppm↔mg/L, recipe text
 - **Batch sequence planner** — editable 1633A-style / training templates; CSV export (planning aid only)
+- **Toxicology Method Assistant (RUO)** — method templates, SPE/SLE recommender, validation target checker, and JSON/checklist export
 
 ## Example downloads
 
@@ -50,6 +51,7 @@ Screen recording instructions: [docs/DEMO_MEDIA.md](docs/DEMO_MEDIA.md). Add `do
 | Calibration prep | [examples/calibration_prep_example.csv](examples/calibration_prep_example.csv) |
 | Batch sequence | [examples/batch_sequence_example.csv](examples/batch_sequence_example.csv) |
 | QC export | [examples/qc_export_example.csv](examples/qc_export_example.csv) |
+| Toxicology method templates | [data/method_templates.json](data/method_templates.json) |
 
 ## Scientific positioning
 
@@ -120,6 +122,7 @@ MIT — see [LICENSE](LICENSE). Software is provided *as is* without warranty; R
 
 ```text
 lcms_calculator/
+├── data/method_templates.json
 ├── pfas_lcmsms_calculator_app.py
 ├── lcms_lab_calc.py
 ├── lcms_presets.py

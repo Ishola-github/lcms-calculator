@@ -8,7 +8,9 @@ Not part of PFAS Enterprise 5.0 frozen serum reproducibility program.
 from __future__ import annotations
 
 import io
+import json
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -43,7 +45,41 @@ from lcms_presets import (
     format_conc,
 )
 
+
+def load_method_templates() -> dict:
+    data_path = Path(__file__).resolve().parent / "data" / "method_templates.json"
+    with data_path.open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def score_prep_strategy(
+    throughput_priority: str,
+    cleanup_priority: str,
+    matrix_complexity: str,
+) -> tuple[str, str]:
+    weights = {"low": 1, "medium": 2, "high": 3}
+    t = weights[throughput_priority]
+    c = weights[cleanup_priority]
+    m = weights[matrix_complexity]
+    spe_score = (2 * c) + (2 * m) + max(0, 4 - t)
+    sle_score = (2 * t) + max(0, 4 - c) + max(0, 4 - m)
+    if spe_score >= sle_score:
+        return "SPE", "Higher cleanup need and/or matrix complexity favors SPE."
+    return "SLE", "Higher throughput and simpler cleanup profile favors SLE."
+
+
+def pick_template(templates: list[dict], matrix: str, panel: str) -> dict | None:
+    for t in templates:
+        if t.get("matrix", "").lower() == matrix.lower() and t.get("panel", "").lower() == panel.lower():
+            return t
+    for t in templates:
+        if t.get("panel", "").lower() == panel.lower():
+            return t
+    return templates[0] if templates else None
+
+
 st.set_page_config(page_title="PFAS LC-MS/MS Prep Helper", layout="wide")
+method_db = load_method_templates()
 
 st.title("PFAS LC-MS/MS preparation helper")
 st.caption(
@@ -96,6 +132,7 @@ with st.sidebar:
     tab_eis,
     tab_mobile,
     tab_recovery,
+    tab_tox,
     tab_batch,
     tab_qc,
 ) = st.tabs(
@@ -108,6 +145,7 @@ with st.sidebar:
         "EIS / NIS",
         "Mobile phase",
         "Recovery / RPD",
+        "Toxicology method",
         "Batch sequence",
         "Batch QC",
     ]
@@ -520,6 +558,130 @@ with tab_recovery:
                 st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
         except ValueError as exc:
             st.error(str(exc))
+
+with tab_tox:
+    st.subheader("Toxicology Method Assistant (RUO)")
+    st.caption(
+        f"{method_db.get('ruo_notice', 'RUO guidance only.')} "
+        "Suggested interpretation only; review against laboratory SOP."
+    )
+    templates = method_db.get("templates", [])
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        tox_matrix = st.selectbox(
+            "Matrix",
+            ["urine", "whole blood", "oral fluid", "serum/plasma"],
+            index=0,
+        )
+    with col_b:
+        tox_panel = st.selectbox(
+            "Panel",
+            ["benzodiazepines", "amphetamines", "samhsa-5", "peth", "custom"],
+            index=0,
+        )
+    with col_c:
+        prep_pref = st.selectbox("Prep preference", ["auto", "SPE", "SLE"], index=0)
+
+    selected_template = pick_template(templates, tox_matrix, tox_panel)
+    if selected_template:
+        st.markdown(f"### Template: {selected_template['name']}")
+        prep = selected_template["prep"]
+        chrom = selected_template["chromatography"]
+        ms = selected_template["ms"]
+        st.write(f"**Prep strategy:** {prep['strategy']} ({prep.get('product_family', 'N/A')})")
+        st.write(f"**Column:** {chrom['column']}")
+        st.write(f"**Mobile phase A:** {chrom['mobile_phase_a']}")
+        st.write(f"**Mobile phase B:** {chrom['mobile_phase_b']}")
+        st.write(
+            f"**Runtime:** {chrom['runtime_min']} min · **Flow:** {chrom['flow_ml_min']} mL/min · "
+            f"**Temp:** {chrom['temperature_c']} C"
+        )
+        st.write(f"**Gradient summary:** {chrom['gradient_summary']}")
+        st.write(f"**MS mode:** {ms['ion_mode']} · **Acquisition:** {ms['acquisition']}")
+        st.write("**Targets:** " + ", ".join(selected_template.get("targets", [])))
+        with st.expander("Suggested prep steps"):
+            for i, step in enumerate(prep.get("steps", []), start=1):
+                st.write(f"{i}. {step}")
+
+        method_text = (
+            f"{selected_template['name']}\n"
+            f"Matrix: {selected_template['matrix']}\n"
+            f"Prep: {prep['strategy']} ({prep.get('product_family', 'N/A')})\n"
+            f"Column: {chrom['column']}\n"
+            f"A: {chrom['mobile_phase_a']}\n"
+            f"B: {chrom['mobile_phase_b']}\n"
+            f"Runtime: {chrom['runtime_min']} min\n"
+            f"Flow: {chrom['flow_ml_min']} mL/min\n"
+            f"MS: {ms['ion_mode']} / {ms['acquisition']}\n"
+            f"Targets: {', '.join(selected_template.get('targets', []))}\n"
+            "RUO guidance only; manual analyst review required.\n"
+        )
+        st.text_area("Method card text", method_text, height=190)
+
+        method_json = json.dumps(selected_template, indent=2)
+        st.download_button(
+            "Export method JSON",
+            method_json,
+            file_name=f"{selected_template['id']}.json",
+            mime="application/json",
+        )
+
+        checklist = pd.DataFrame(
+            {
+                "item": [
+                    "Matrix verified",
+                    "Prep strategy selected",
+                    "Column/mobile phases reviewed",
+                    "MS transitions verified on instrument",
+                    "SOP review complete",
+                ],
+                "status": ["pending"] * 5,
+            }
+        )
+        buf_chk = io.StringIO()
+        checklist.to_csv(buf_chk, index=False)
+        st.download_button(
+            "Export method checklist CSV",
+            buf_chk.getvalue(),
+            file_name=f"{selected_template['id']}_checklist.csv",
+            mime="text/csv",
+        )
+
+        st.divider()
+        st.markdown("#### SPE vs SLE helper")
+        h1, h2, h3 = st.columns(3)
+        with h1:
+            throughput_priority = st.selectbox("Throughput priority", ["low", "medium", "high"], index=1)
+        with h2:
+            cleanup_priority = st.selectbox("Cleanup priority", ["low", "medium", "high"], index=2)
+        with h3:
+            matrix_complexity = st.selectbox("Matrix complexity", ["low", "medium", "high"], index=1)
+        rec_auto, rec_reason = score_prep_strategy(throughput_priority, cleanup_priority, matrix_complexity)
+        final_rec = rec_auto if prep_pref == "auto" else prep_pref
+        st.info(f"Recommended prep: **{final_rec}**. {rec_reason}")
+
+        st.divider()
+        st.markdown("#### Validation target checker")
+        vt = selected_template["validation_targets"]
+        v1, v2, v3 = st.columns(3)
+        with v1:
+            observed_recovery = st.number_input("Observed recovery (%)", min_value=0.0, value=float(vt["recovery_pct_min"]))
+        with v2:
+            observed_cv = st.number_input("Observed CV (%)", min_value=0.0, value=float(vt["cv_pct_max"]))
+        with v3:
+            observed_lloq = st.number_input("Observed LLOQ (ng/mL)", min_value=0.0, value=float(vt["lloq_ng_ml_max"]))
+
+        rec_ok = observed_recovery >= float(vt["recovery_pct_min"])
+        cv_ok = observed_cv <= float(vt["cv_pct_max"])
+        lloq_ok = observed_lloq <= float(vt["lloq_ng_ml_max"])
+        st.write(
+            f"Recovery target: >= {vt['recovery_pct_min']}% · CV target: <= {vt['cv_pct_max']}% · "
+            f"LLOQ target: <= {vt['lloq_ng_ml_max']} ng/mL"
+        )
+        st.success("Recovery: PASS") if rec_ok else st.warning("Recovery: WARN/FAIL")
+        st.success("CV: PASS") if cv_ok else st.warning("CV: WARN/FAIL")
+        st.success("LLOQ: PASS") if lloq_ok else st.warning("LLOQ: WARN/FAIL")
+        st.caption("Suggested interpretation only — confirm acceptance criteria per laboratory SOP.")
 
 with tab_batch:
     st.subheader("Batch sequence planner")
