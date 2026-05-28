@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: "PFAS LC-MS/MS Preparation Helper (RUO)"
+abstract: >-
+  Research-use-only (RUO) LC-MS/MS preparation helper for PFAS and toxicology
+  workflows: dilution and spiking calculators, SPE concentration factor,
+  calibration prep, internal standard helper, mobile phase chemistry, batch
+  sequence planning, recovery/RPD interpretation, and a Toxicology Method
+  Assistant. Not EPA/ISO certified and not for regulatory submission.
+type: software
+authors:
+  - family-names: Ishola
+    given-names: Sunday
+    # orcid: "https://orcid.org/0000-0000-0000-0000"
+    # affiliation: "Your affiliation here"
+repository-code: "https://github.com/Ishola-github/lcms-calculator"
+url: "https://lcms-calculator.streamlit.app/"
+license: MIT
+version: lcms-tools-v1.0.6
+date-released: "2026-05-28"
+doi: 10.5281/zenodo.20427175
+keywords:
+  - PFAS
+  - LC-MS/MS
+  - toxicology
+  - sample preparation
+  - laboratory utility
+  - research use only
