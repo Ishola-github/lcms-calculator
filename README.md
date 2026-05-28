@@ -20,7 +20,6 @@ https://lcms-calculator.streamlit.app/
 
 Research/training deployment only. Manual analyst review required; not a regulatory service.
 
-Research/training deployment only. Manual analyst review required; not a regulatory service.)
 ## Demo media
 
 Screen recording instructions: [docs/DEMO_MEDIA.md](docs/DEMO_MEDIA.md). Add `docs/media/demo.gif` when available.
