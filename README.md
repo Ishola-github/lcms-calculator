@@ -1,7 +1,7 @@
 # PFAS LC-MS/MS preparation helper
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20427176.svg)](https://doi.org/10.5281/zenodo.20427176)
-[![Release](https://img.shields.io/github/v/tag/Ishola-github/lcms-calculator?label=lcms-tools-v1.0.4)](https://github.com/Ishola-github/lcms-calculator/releases/tag/lcms-tools-v1.0.4)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20427175.svg)](https://doi.org/10.5281/zenodo.20427175)
+[![Release](https://img.shields.io/github/v/tag/Ishola-github/lcms-calculator?label=release)](https://github.com/Ishola-github/lcms-calculator/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Research-use-only (RUO) LC-MS/MS preparation helper for PFAS workflows, standards preparation, spiking calculations, QC planning, and laboratory support.
@@ -103,14 +103,16 @@ Regenerate: `python scripts/capture_screenshots.py` (see [screenshots/README.md]
 
 After Zenodo publish, use the DOI from [docs/ZENODO_DOI_WORKFLOW.md](docs/ZENODO_DOI_WORKFLOW.md):
 
+The concept DOI `10.5281/zenodo.20427175` always resolves to the latest version. To cite this exact frozen release, use the version DOI below.
+
 ```bibtex
 @software{lcms_calculator_2026,
   author = {Ishola, Sunday},
   title = {PFAS LC-MS/MS Preparation Helper (RUO)},
   year = {2026},
-  version = {lcms-tools-v1.0.4},
+  version = {lcms-tools-v1.0.6},
   url = {https://github.com/Ishola-github/lcms-calculator},
-  doi = {10.5281/zenodo.20427176}
+  doi = {10.5281/zenodo.20434692}
 }
 ```
 
