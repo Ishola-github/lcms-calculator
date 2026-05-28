@@ -16,7 +16,7 @@ Repository: https://github.com/Ishola-github/lcms-calculator
 
 ## Live demo (optional)
 
-https://lcms-calculator.streamlit.app/
+[Launch Streamlit App](https://lcms-calculator.streamlit.app/)
 
 Research/training deployment only. Manual analyst review required; not a regulatory service.
 
